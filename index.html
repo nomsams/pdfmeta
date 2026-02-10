@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSINT PDF Forensic Suite v3.0</title>
+    <title>OSINT PDF Forensic Suite v4.0 (Pro)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,8 @@
                     colors: {
                         gray: { 850: '#1f2937', 900: '#111827', 950: '#0b0f19' },
                         cyan: { 450: '#22d3ee' },
-                        red: { 450: '#f87171' }
+                        red: { 450: '#f87171' },
+                        orange: { 450: '#fb923c' }
                     },
                     fontFamily: { mono: ['"JetBrains Mono"', 'monospace'] }
                 }
@@ -24,55 +25,69 @@
     </script>
     
     <!-- Libraries -->
+    <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- SparkMD5 for legacy hashing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.2/spark-md5.min.js"></script>
+    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        /* Professional Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #0b0f19; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
         
         .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
+            background: rgba(30, 41, 59, 0.6);
             backdrop-filter: blur(12px);
-            border: 1px solid rgba(71, 85, 105, 0.4);
+            border: 1px solid rgba(71, 85, 105, 0.3);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
         
         .hex-grid {
             display: grid;
-            grid-template-columns: 50px 1fr;
-            gap: 10px;
+            grid-template-columns: 60px 1fr;
+            gap: 15px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
+            line-height: 1.5;
         }
-        
+
         .loading-overlay {
             background: rgba(11, 15, 25, 0.95);
             backdrop-filter: blur(5px);
         }
+
+        /* Syntax Highlighting for XMP */
+        .xml-tag { color: #f472b6; }
+        .xml-attr { color: #a78bfa; }
+        .xml-val { color: #60a5fa; }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-200 font-sans h-screen flex flex-col overflow-hidden selection:bg-cyan-400 selection:text-black">
 
     <!-- Navbar -->
-    <nav class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex justify-between items-center shadow-lg z-20">
+    <nav class="bg-gray-900 border-b border-gray-800 px-5 py-3 flex justify-between items-center shadow-lg z-20">
         <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-cyan-400/10 rounded flex items-center justify-center border border-cyan-400/30">
-                <i class="fa-solid fa-radar text-cyan-400"></i>
+            <div class="w-9 h-9 bg-gradient-to-br from-cyan-500/20 to-blue-600/20 rounded-lg flex items-center justify-center border border-cyan-500/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]">
+                <i class="fa-solid fa-shield-halved text-cyan-400"></i>
             </div>
             <div>
-                <h1 class="font-bold text-lg tracking-wide text-white">OSINT <span class="text-cyan-400">FORENSICS</span></h1>
-                <p class="text-[10px] text-gray-500 uppercase tracking-wider">Client-Side PDF Analyzer</p>
+                <h1 class="font-bold text-lg tracking-wide text-white leading-tight">OSINT <span class="text-cyan-400">FORENSICS</span></h1>
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Pro Suite v4.0</span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                </div>
             </div>
         </div>
         <div class="flex gap-3">
-            <button onclick="exportReport()" id="btnExport" class="hidden px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-xs transition flex items-center gap-2">
-                <i class="fa-solid fa-download"></i> JSON Report
+            <button onclick="exportReport()" id="btnExport" class="hidden px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-xs transition flex items-center gap-2 text-gray-300">
+                <i class="fa-solid fa-file-export"></i> Export JSON
             </button>
             <button onclick="location.reload()" class="px-3 py-1.5 bg-red-900/20 hover:bg-red-900/40 border border-red-800/40 text-red-300 rounded text-xs transition flex items-center gap-2">
-                <i class="fa-solid fa-power-off"></i> Reset
+                <i class="fa-solid fa-rotate-right"></i> Reset
             </button>
         </div>
     </nav>
@@ -81,242 +96,247 @@
     <div class="flex flex-1 overflow-hidden">
         
         <!-- Sidebar -->
-        <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col z-10">
+        <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col z-10 shadow-xl">
             <!-- Dropzone -->
             <div class="p-4">
-                <div id="dropZone" class="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center cursor-pointer hover:border-cyan-400 hover:bg-gray-800/50 transition group relative overflow-hidden">
-                    <div class="absolute inset-0 bg-cyan-400/5 opacity-0 group-hover:opacity-100 transition"></div>
-                    <i class="fa-solid fa-file-shield text-3xl text-gray-600 group-hover:text-cyan-400 mb-3 transition"></i>
-                    <p class="text-xs text-gray-400 font-medium">DROP PDF EVIDENCE</p>
+                <div id="dropZone" class="border-2 border-dashed border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-cyan-400 hover:bg-gray-800/50 transition group relative overflow-hidden">
+                    <div class="absolute inset-0 bg-cyan-400/5 opacity-0 group-hover:opacity-100 transition duration-500"></div>
+                    <i class="fa-solid fa-file-import text-3xl text-gray-600 group-hover:text-cyan-400 mb-3 transition transform group-hover:scale-110 duration-300"></i>
+                    <p class="text-xs text-gray-400 font-bold tracking-wide">DRAG & DROP PDF</p>
+                    <p class="text-[10px] text-gray-600 mt-1">or click to browse</p>
                     <input type="file" id="fileInput" accept=".pdf" class="hidden">
                 </div>
             </div>
 
-            <!-- File Info (Hidden until loaded) -->
-            <div id="fileInfoPanel" class="hidden px-4 pb-4 border-b border-gray-800">
-                <div class="text-xs text-gray-500 mb-1">FILENAME</div>
-                <div id="fileName" class="text-sm font-bold text-white truncate mb-3"></div>
+            <!-- File Info Panel -->
+            <div id="fileInfoPanel" class="hidden px-4 pb-4 border-b border-gray-800 animate-fade-in">
+                <div class="text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Target File</div>
+                <div id="fileName" class="text-sm font-bold text-white truncate mb-3" title=""></div>
                 
                 <div class="grid grid-cols-2 gap-2">
-                    <div class="bg-gray-800 p-2 rounded border border-gray-700">
-                        <div class="text-[10px] text-gray-500">SIZE</div>
+                    <div class="bg-gray-800/50 p-2 rounded border border-gray-700/50">
+                        <div class="text-[9px] text-gray-500 uppercase">Size</div>
                         <div id="fileSize" class="text-xs font-mono text-cyan-400"></div>
                     </div>
-                    <div class="bg-gray-800 p-2 rounded border border-gray-700">
-                        <div class="text-[10px] text-gray-500">VERSION</div>
-                        <div id="pdfVersion" class="text-xs font-mono text-cyan-400"></div>
+                    <div class="bg-gray-800/50 p-2 rounded border border-gray-700/50">
+                        <div class="text-[9px] text-gray-500 uppercase">Entropy</div>
+                        <div id="fileEntropy" class="text-xs font-mono text-orange-400">-</div>
                     </div>
                 </div>
             </div>
 
             <!-- Navigation -->
-            <div id="navTabs" class="hidden flex-1 overflow-y-auto py-2 space-y-1">
-                <button onclick="switchTab('overview')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400 active-tab" id="btn-overview">
-                    <i class="fa-solid fa-chart-network w-6"></i> Overview & Hashes
+            <div id="navTabs" class="hidden flex-1 overflow-y-auto py-2 space-y-0.5">
+                <button onclick="switchTab('overview')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400 active-tab transition-colors" id="btn-overview">
+                    <i class="fa-solid fa-chart-pie w-5 mr-2 text-center"></i> Overview
                 </button>
-                <button onclick="switchTab('metadata')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-metadata">
-                    <i class="fa-solid fa-tags w-6"></i> Metadata & XMP
+                <button onclick="switchTab('metadata')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400 transition-colors" id="btn-metadata">
+                    <i class="fa-solid fa-list-ul w-5 mr-2 text-center"></i> Metadata
                 </button>
-                <button onclick="switchTab('threats')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-threats">
-                    <i class="fa-solid fa-bug w-6"></i> Threat Analysis
+                <button onclick="switchTab('threats')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400 transition-colors" id="btn-threats">
+                    <i class="fa-solid fa-bug-slash w-5 mr-2 text-center"></i> Threat Intel
                 </button>
-                <button onclick="switchTab('content')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-content">
-                    <i class="fa-solid fa-magnifying-glass w-6"></i> Content & PII
+                <button onclick="switchTab('content')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400 transition-colors" id="btn-content">
+                    <i class="fa-solid fa-magnifying-glass w-5 mr-2 text-center"></i> Content & PII
                 </button>
-                <button onclick="switchTab('structure')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-structure">
-                    <i class="fa-solid fa-layer-group w-6"></i> Structure & Fonts
+                <button onclick="switchTab('structure')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400 transition-colors" id="btn-structure">
+                    <i class="fa-solid fa-code-branch w-5 mr-2 text-center"></i> Structure
                 </button>
-                <button onclick="switchTab('hex')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-hex">
-                    <i class="fa-solid fa-binary w-6"></i> Hex Header
+                <button onclick="switchTab('hex')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400 transition-colors" id="btn-hex">
+                    <i class="fa-solid fa-binary w-5 mr-2 text-center"></i> Hex Viewer
                 </button>
             </div>
         </aside>
 
         <!-- Content Area -->
-        <main class="flex-1 bg-gray-950 relative overflow-y-auto p-8">
+        <main class="flex-1 bg-gray-950 relative overflow-y-auto p-8 scroll-smooth">
             
             <!-- Loading Screen -->
             <div id="loading" class="hidden absolute inset-0 loading-overlay z-50 flex flex-col items-center justify-center">
                 <div class="relative">
-                    <div class="w-16 h-16 border-4 border-gray-700 border-t-cyan-400 rounded-full animate-spin"></div>
+                    <div class="w-20 h-20 border-4 border-gray-800 border-t-cyan-400 rounded-full animate-spin"></div>
                     <div class="absolute inset-0 flex items-center justify-center">
-                        <i class="fa-solid fa-eye text-cyan-400 text-sm"></i>
+                        <i class="fa-solid fa-microscope text-cyan-400 text-lg animate-pulse"></i>
                     </div>
                 </div>
-                <h2 class="text-xl font-bold text-white mt-6">Forensic Scan In Progress</h2>
-                <p id="loadingText" class="text-gray-400 text-sm mt-2 font-mono">Initializing...</p>
+                <h2 class="text-xl font-bold text-white mt-6 tracking-wide">Analyzing Artifact</h2>
+                <p id="loadingText" class="text-gray-400 text-sm mt-2 font-mono">Initializing buffer...</p>
+                <div class="w-64 h-1 bg-gray-800 rounded-full mt-4 overflow-hidden">
+                    <div id="progressBar" class="h-full bg-cyan-400 w-0 transition-all duration-300"></div>
+                </div>
             </div>
 
-            <!-- Empty State -->
+            <!-- Welcome State -->
             <div id="welcome" class="h-full flex flex-col items-center justify-center text-gray-600 select-none">
-                <div class="w-24 h-24 bg-gray-900 rounded-full flex items-center justify-center mb-6 border border-gray-800">
-                    <i class="fa-solid fa-fingerprint text-4xl opacity-30"></i>
+                <div class="w-32 h-32 bg-gray-900/50 rounded-full flex items-center justify-center mb-6 border border-gray-800 shadow-2xl">
+                    <i class="fa-solid fa-fingerprint text-5xl opacity-20 text-cyan-400"></i>
                 </div>
-                <h2 class="text-xl font-semibold text-gray-500">Ready for Analysis</h2>
-                <p class="text-sm mt-2">Upload a PDF to extract metadata, hashes, and hidden threats.</p>
+                <h2 class="text-2xl font-bold text-gray-500">Forensic Workspace</h2>
+                <p class="text-sm mt-2 text-gray-600">Secure, Client-Side PDF Analysis</p>
             </div>
 
             <!-- Tab: Overview -->
-            <div id="tab-overview" class="tab-content hidden space-y-6">
+            <div id="tab-overview" class="tab-content hidden space-y-6 animate-fade-in">
                 <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                    <span class="w-1 h-8 bg-cyan-400 rounded-full"></span> Evidence Overview
+                    <span class="w-1.5 h-8 bg-cyan-400 rounded-full shadow-[0_0_10px_#22d3ee]"></span> Evidence Overview
                 </h2>
                 
                 <!-- Hashes -->
-                <div class="glass-panel rounded-lg p-6">
-                    <h3 class="text-cyan-400 font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <i class="fa-solid fa-hashtag"></i> Cryptographic Hashes
+                <div class="glass-panel rounded-xl p-6 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-4 opacity-10">
+                        <i class="fa-solid fa-hashtag text-6xl"></i>
+                    </div>
+                    <h3 class="text-cyan-400 font-bold text-xs uppercase tracking-wider mb-5 flex items-center gap-2">
+                        <i class="fa-solid fa-fingerprint"></i> Cryptographic Hashes
                     </h3>
-                    <div class="space-y-4">
+                    <div class="space-y-4 relative z-10">
                         <div class="group">
-                            <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <div class="flex justify-between text-[10px] text-gray-500 mb-1 uppercase font-bold">
                                 <span>MD5 (Legacy)</span>
-                                <span class="opacity-0 group-hover:opacity-100 cursor-pointer text-cyan-400" onclick="copyText('hash-md5')">Copy</span>
+                                <span class="opacity-0 group-hover:opacity-100 cursor-pointer text-cyan-400 transition" onclick="copyText('hash-md5')">Copy</span>
                             </div>
-                            <code id="hash-md5" class="block bg-black/40 p-3 rounded border border-gray-800 text-xs font-mono text-green-400 break-all hover:border-gray-600 transition">...</code>
+                            <code id="hash-md5" class="block bg-black/40 p-3 rounded border border-gray-800 text-xs font-mono text-green-400 break-all hover:border-gray-600 transition cursor-text select-all">...</code>
                         </div>
                         <div class="group">
-                            <div class="flex justify-between text-xs text-gray-500 mb-1">
-                                <span>SHA-1</span>
-                                <span class="opacity-0 group-hover:opacity-100 cursor-pointer text-cyan-400" onclick="copyText('hash-sha1')">Copy</span>
-                            </div>
-                            <code id="hash-sha1" class="block bg-black/40 p-3 rounded border border-gray-800 text-xs font-mono text-green-400 break-all hover:border-gray-600 transition">...</code>
-                        </div>
-                        <div class="group">
-                            <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <div class="flex justify-between text-[10px] text-gray-500 mb-1 uppercase font-bold">
                                 <span>SHA-256 (Standard)</span>
-                                <span class="opacity-0 group-hover:opacity-100 cursor-pointer text-cyan-400" onclick="copyText('hash-sha256')">Copy</span>
+                                <span class="opacity-0 group-hover:opacity-100 cursor-pointer text-cyan-400 transition" onclick="copyText('hash-sha256')">Copy</span>
                             </div>
-                            <code id="hash-sha256" class="block bg-black/40 p-3 rounded border border-gray-800 text-xs font-mono text-green-400 break-all hover:border-gray-600 transition">...</code>
+                            <code id="hash-sha256" class="block bg-black/40 p-3 rounded border border-gray-800 text-xs font-mono text-green-400 break-all hover:border-gray-600 transition cursor-text select-all">...</code>
                         </div>
                     </div>
                 </div>
 
-                <!-- Quick Stats Grid -->
+                <!-- Stats Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="glass-panel p-4 rounded-lg border-l-4 border-l-blue-500">
-                        <div class="text-gray-500 text-xs uppercase">Page Count</div>
-                        <div id="stat-pages" class="text-2xl font-bold text-white mt-1">-</div>
+                    <div class="glass-panel p-5 rounded-xl border-l-4 border-l-blue-500">
+                        <div class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Page Count</div>
+                        <div id="stat-pages" class="text-3xl font-bold text-white mt-1">-</div>
                     </div>
-                    <div class="glass-panel p-4 rounded-lg border-l-4 border-l-purple-500">
-                        <div class="text-gray-500 text-xs uppercase">Images Detected</div>
-                        <div id="stat-images" class="text-2xl font-bold text-white mt-1">-</div>
+                    <div class="glass-panel p-5 rounded-xl border-l-4 border-l-purple-500">
+                        <div class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Images / Objects</div>
+                        <div id="stat-images" class="text-3xl font-bold text-white mt-1">-</div>
                     </div>
-                    <div class="glass-panel p-4 rounded-lg border-l-4 border-l-yellow-500">
-                        <div class="text-gray-500 text-xs uppercase">Modifications</div>
-                        <div id="stat-updates" class="text-2xl font-bold text-white mt-1">-</div>
+                    <div class="glass-panel p-5 rounded-xl border-l-4 border-l-red-500">
+                        <div class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Risk Score</div>
+                        <div id="stat-risk" class="text-3xl font-bold text-white mt-1">-</div>
                     </div>
                 </div>
             </div>
 
             <!-- Tab: Metadata -->
-            <div id="tab-metadata" class="tab-content hidden space-y-6">
+            <div id="tab-metadata" class="tab-content hidden space-y-6 animate-fade-in">
                 <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                    <span class="w-1 h-8 bg-purple-500 rounded-full"></span> Metadata
+                    <span class="w-1.5 h-8 bg-purple-500 rounded-full shadow-[0_0_10px_#a855f7]"></span> Metadata
                 </h2>
 
-                <div class="glass-panel rounded-lg overflow-hidden">
-                    <div class="bg-gray-900/50 px-4 py-3 border-b border-gray-800 font-bold text-xs text-gray-400 uppercase">
+                <div class="glass-panel rounded-xl overflow-hidden">
+                    <div class="bg-gray-900/50 px-5 py-3 border-b border-gray-800 font-bold text-xs text-gray-400 uppercase tracking-wider">
                         Standard Info Dictionary
                     </div>
                     <table class="w-full text-sm text-left">
-                        <tbody id="metaTableBody" class="divide-y divide-gray-800"></tbody>
+                        <tbody id="metaTableBody" class="divide-y divide-gray-800/50"></tbody>
                     </table>
                 </div>
 
-                <div class="glass-panel rounded-lg p-4">
+                <div class="glass-panel rounded-xl p-5">
                     <div class="flex justify-between items-center mb-3">
-                        <h3 class="font-bold text-xs text-gray-400 uppercase">XMP Metadata (Raw XML)</h3>
-                        <button onclick="copyText('xmpBox')" class="text-xs bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">Copy XML</button>
+                        <h3 class="font-bold text-xs text-gray-400 uppercase tracking-wider">XMP Metadata (Raw XML)</h3>
+                        <button onclick="copyText('xmpBox')" class="text-[10px] bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded border border-gray-700 transition uppercase font-bold">Copy XML</button>
                     </div>
-                    <pre id="xmpBox" class="bg-black/40 p-4 rounded border border-gray-800 text-xs font-mono text-blue-300 h-80 overflow-y-auto whitespace-pre-wrap"></pre>
+                    <pre id="xmpBox" class="bg-black/40 p-4 rounded border border-gray-800 text-xs font-mono text-blue-300 h-96 overflow-y-auto whitespace-pre-wrap scrollbar-thin"></pre>
                 </div>
             </div>
 
             <!-- Tab: Threats -->
-            <div id="tab-threats" class="tab-content hidden space-y-6">
+            <div id="tab-threats" class="tab-content hidden space-y-6 animate-fade-in">
                 <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                    <span class="w-1 h-8 bg-red-500 rounded-full"></span> Threat Analysis
+                    <span class="w-1.5 h-8 bg-red-500 rounded-full shadow-[0_0_10px_#ef4444]"></span> Threat Analysis
                 </h2>
 
-                <div class="glass-panel rounded-lg p-6">
-                    <h3 class="text-red-400 font-bold text-xs uppercase tracking-wider mb-4">
-                        <i class="fa-solid fa-shield-virus mr-2"></i> Active Content Scan
+                <div class="glass-panel rounded-xl p-6">
+                    <h3 class="text-red-400 font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-virus"></i> Active Content Scan
                     </h3>
-                    <div id="threatResults" class="space-y-2">
-                        <!-- Populated by JS -->
-                    </div>
+                    <div id="threatResults" class="space-y-2"></div>
                 </div>
 
-                <div class="glass-panel rounded-lg p-6">
-                    <h3 class="text-yellow-400 font-bold text-xs uppercase tracking-wider mb-4">
-                        <i class="fa-solid fa-clock-rotate-left mr-2"></i> Modification History (Incremental Updates)
+                <div class="glass-panel rounded-xl p-6">
+                    <h3 class="text-orange-400 font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left"></i> Modification History
                     </h3>
-                    <p class="text-sm text-gray-400 mb-4">PDFs can be saved incrementally. Multiple EOF markers indicate the file was edited and resaved, potentially hiding previous versions.</p>
-                    <div id="modHistory" class="text-sm font-mono bg-black/30 p-3 rounded border border-gray-800"></div>
+                    <p class="text-xs text-gray-400 mb-4 leading-relaxed">
+                        PDFs support "Incremental Updates". Multiple EOF markers indicate the file was edited and saved multiple times. 
+                        Forensic artifacts from previous versions may persist in the file slack space.
+                    </p>
+                    <div id="modHistory" class="text-sm font-mono bg-black/30 p-4 rounded border border-gray-800"></div>
                 </div>
             </div>
 
             <!-- Tab: Content -->
-            <div id="tab-content" class="tab-content hidden space-y-6">
+            <div id="tab-content" class="tab-content hidden space-y-6 animate-fade-in">
                 <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                    <span class="w-1 h-8 bg-green-500 rounded-full"></span> Content & PII
+                    <span class="w-1.5 h-8 bg-green-500 rounded-full shadow-[0_0_10px_#22c55e]"></span> Content & PII
                 </h2>
                 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="glass-panel rounded-lg p-5 flex flex-col h-[500px]">
-                        <h3 class="text-cyan-400 font-bold text-xs uppercase mb-3">Extracted Hyperlinks</h3>
+                    <div class="glass-panel rounded-xl p-5 flex flex-col h-[600px]">
+                        <h3 class="text-cyan-400 font-bold text-xs uppercase mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-link"></i> Extracted Hyperlinks
+                        </h3>
                         <div id="linkList" class="flex-1 overflow-y-auto space-y-1 text-xs font-mono pr-2"></div>
                     </div>
 
-                    <div class="glass-panel rounded-lg p-5 flex flex-col h-[500px]">
-                        <h3 class="text-cyan-400 font-bold text-xs uppercase mb-3">Potential PII (Emails / IPs)</h3>
+                    <div class="glass-panel rounded-xl p-5 flex flex-col h-[600px]">
+                        <h3 class="text-cyan-400 font-bold text-xs uppercase mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-at"></i> Potential PII (Emails / IPs)
+                        </h3>
                         <div id="piiList" class="flex-1 overflow-y-auto space-y-1 text-xs font-mono pr-2"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Tab: Structure -->
-            <div id="tab-structure" class="tab-content hidden space-y-6">
+            <div id="tab-structure" class="tab-content hidden space-y-6 animate-fade-in">
                 <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                    <span class="w-1 h-8 bg-orange-500 rounded-full"></span> Structure
+                    <span class="w-1.5 h-8 bg-orange-500 rounded-full shadow-[0_0_10px_#f97316]"></span> Structure
                 </h2>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="glass-panel rounded-lg p-5">
+                    <div class="glass-panel rounded-xl p-5">
                         <h3 class="text-gray-400 font-bold text-xs uppercase mb-3">Fonts Used</h3>
                         <div id="fontList" class="flex flex-wrap gap-2"></div>
                     </div>
-                    <div class="glass-panel rounded-lg p-5">
+                    <div class="glass-panel rounded-xl p-5">
                         <h3 class="text-gray-400 font-bold text-xs uppercase mb-3">Embedded Files</h3>
                         <div id="attachmentList" class="text-sm text-gray-400"></div>
                     </div>
                 </div>
 
-                <div class="glass-panel rounded-lg p-5">
+                <div class="glass-panel rounded-xl p-5">
                     <h3 class="text-gray-400 font-bold text-xs uppercase mb-3">Page Geometry</h3>
                     <div class="overflow-x-auto">
                         <table class="w-full text-xs text-left">
                             <thead class="text-gray-500 border-b border-gray-700">
                                 <tr>
-                                    <th class="p-2">Page</th>
-                                    <th class="p-2">Size (pts)</th>
-                                    <th class="p-2">Rotation</th>
-                                    <th class="p-2">Objects</th>
+                                    <th class="p-3">Page</th>
+                                    <th class="p-3">Size (pts)</th>
+                                    <th class="p-3">Rotation</th>
+                                    <th class="p-3">Objects</th>
                                 </tr>
                             </thead>
-                            <tbody id="pageGeoBody" class="font-mono text-gray-300"></tbody>
+                            <tbody id="pageGeoBody" class="font-mono text-gray-300 divide-y divide-gray-800/50"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
             <!-- Tab: Hex -->
-            <div id="tab-hex" class="tab-content hidden space-y-6">
+            <div id="tab-hex" class="tab-content hidden space-y-6 animate-fade-in">
                 <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                    <span class="w-1 h-8 bg-gray-500 rounded-full"></span> Raw Header (First 1KB)
+                    <span class="w-1.5 h-8 bg-gray-500 rounded-full"></span> Raw Header (First 1KB)
                 </h2>
-                <div class="glass-panel rounded-lg p-4">
+                <div class="glass-panel rounded-xl p-4">
                     <div id="hexView" class="hex-grid text-gray-400"></div>
                 </div>
             </div>
@@ -326,20 +346,28 @@
 
 <script>
     // --- Configuration ---
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    // Ensure we use the same version for worker
+    const PDFJS_VERSION = '3.11.174';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
     
     let analysisData = {}; 
-    let rawPDFBuffer = null;
+    let masterBuffer = null; // The original source of truth
 
     // --- UI Logic ---
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const loading = document.getElementById('loading');
     const loadingText = document.getElementById('loadingText');
+    const progressBar = document.getElementById('progressBar');
 
     dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); });
-    dropZone.addEventListener('drop', (e) => { e.preventDefault(); if(e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]); });
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-cyan-400', 'bg-gray-800/50'); });
+    dropZone.addEventListener('dragleave', (e) => { dropZone.classList.remove('border-cyan-400', 'bg-gray-800/50'); });
+    dropZone.addEventListener('drop', (e) => { 
+        e.preventDefault(); 
+        dropZone.classList.remove('border-cyan-400', 'bg-gray-800/50');
+        if(e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]); 
+    });
     fileInput.addEventListener('change', () => { if(fileInput.files.length) processFile(fileInput.files[0]); });
 
     function switchTab(tabId) {
@@ -347,17 +375,27 @@
         document.getElementById(`tab-${tabId}`).classList.remove('hidden');
         
         document.querySelectorAll('.nav-btn').forEach(btn => {
-            btn.classList.remove('border-cyan-400', 'bg-gray-800', 'text-white');
+            btn.classList.remove('border-cyan-400', 'bg-gray-800', 'text-white', 'active-tab');
             btn.classList.add('border-transparent', 'text-gray-400');
         });
         const activeBtn = document.getElementById(`btn-${tabId}`);
-        activeBtn.classList.add('border-cyan-400', 'bg-gray-800', 'text-white');
+        activeBtn.classList.add('border-cyan-400', 'bg-gray-800', 'text-white', 'active-tab');
         activeBtn.classList.remove('border-transparent', 'text-gray-400');
     }
 
     function copyText(elementId) {
         const text = document.getElementById(elementId).innerText;
-        navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard'));
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = event.target;
+            const original = btn.innerText;
+            btn.innerText = "COPIED!";
+            setTimeout(() => btn.innerText = original, 1500);
+        });
+    }
+
+    function updateProgress(percent, text) {
+        progressBar.style.width = `${percent}%`;
+        if(text) loadingText.textContent = text;
     }
 
     // --- Main Processor ---
@@ -370,123 +408,157 @@
         document.getElementById('fileInfoPanel').classList.remove('hidden');
         document.getElementById('btnExport').classList.remove('hidden');
         loading.classList.remove('hidden');
+        updateProgress(5, "Reading file...");
 
         // Basic Info
         document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileName').title = file.name;
         document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(2) + ' KB';
         analysisData = { filename: file.name, size: file.size, timestamp: new Date().toISOString() };
 
         try {
-            rawPDFBuffer = await file.arrayBuffer();
+            // 1. Read File into Master Buffer
+            masterBuffer = await file.arrayBuffer();
+            updateProgress(15, "Calculating Hashes...");
+
+            // 2. Hashes (Use masterBuffer)
+            await calculateHashes(masterBuffer);
             
-            // 1. Hashes
-            loadingText.textContent = "Calculating Cryptographic Hashes...";
-            await calculateHashes(rawPDFBuffer);
+            // 3. Entropy (Use masterBuffer)
+            updateProgress(25, "Calculating Entropy...");
+            calculateEntropy(masterBuffer);
 
-            // 2. Raw Header Analysis (Version & Hex)
-            loadingText.textContent = "Analyzing Binary Header...";
-            analyzeHeader(rawPDFBuffer);
+            // 4. Hex & Header (Use masterBuffer)
+            analyzeHeader(masterBuffer);
 
-            // 3. Load PDF
-            loadingText.textContent = "Parsing PDF Structure...";
-            const loadingTask = pdfjsLib.getDocument(rawPDFBuffer);
+            // 5. PDF Parsing (CRITICAL FIX: Clone buffer for PDF.js)
+            // PDF.js worker might detach the buffer, so we give it a copy.
+            updateProgress(35, "Parsing PDF Structure...");
+            const pdfBuffer = masterBuffer.slice(0); 
+            const loadingTask = pdfjsLib.getDocument(pdfBuffer);
             const pdfDoc = await loadingTask.promise;
             
-            // 4. Metadata
+            // 6. Metadata
             const metadata = await pdfDoc.getMetadata();
             renderMetadata(metadata);
 
-            // 5. Deep Scan (Pages, Fonts, Images, PII)
-            loadingText.textContent = "Deep Scanning Pages & Content...";
+            // 7. Deep Scan (Pages)
+            updateProgress(50, "Scanning Pages & Objects...");
             await analyzeDeepStructure(pdfDoc);
 
-            // 6. Threat Scan (Regex on raw string)
-            loadingText.textContent = "Scanning for Threats...";
-            analyzeThreats(rawPDFBuffer);
+            // 8. Threat Scan (Regex on Binary)
+            updateProgress(85, "Scanning for Threats...");
+            analyzeThreats(masterBuffer);
 
-            switchTab('overview');
+            updateProgress(100, "Finalizing...");
+            setTimeout(() => {
+                loading.classList.add('hidden');
+                switchTab('overview');
+            }, 500);
 
         } catch (err) {
             console.error(err);
-            alert(`Error analyzing PDF: ${err.message}`);
-        } finally {
             loading.classList.add('hidden');
+            alert(`Error analyzing PDF: ${err.message}`);
         }
     }
 
-    // --- 1. Hashing (MD5, SHA1, SHA256) ---
+    // --- 1. Hashing ---
     async function calculateHashes(buffer) {
-        // MD5 via SparkMD5
+        // MD5 (SparkMD5)
         const spark = new SparkMD5.ArrayBuffer();
         spark.append(buffer);
         const md5 = spark.end();
         
-        // SHA via WebCrypto
-        const sha1Buf = await crypto.subtle.digest('SHA-1', buffer);
+        // SHA-256 (WebCrypto)
         const sha256Buf = await crypto.subtle.digest('SHA-256', buffer);
-        
         const toHex = (buf) => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-        
-        const sha1 = toHex(sha1Buf);
         const sha256 = toHex(sha256Buf);
 
         document.getElementById('hash-md5').textContent = md5;
-        document.getElementById('hash-sha1').textContent = sha1;
         document.getElementById('hash-sha256').textContent = sha256;
 
-        analysisData.hashes = { md5, sha1, sha256 };
+        analysisData.hashes = { md5, sha256 };
     }
 
-    // --- 2. Header & Hex ---
+    // --- 2. Entropy Calculation ---
+    function calculateEntropy(buffer) {
+        const data = new Uint8Array(buffer);
+        const frequencies = new Array(256).fill(0);
+        for (let i = 0; i < data.length; i++) {
+            frequencies[data[i]]++;
+        }
+
+        let entropy = 0;
+        for (let i = 0; i < 256; i++) {
+            if (frequencies[i] > 0) {
+                const p = frequencies[i] / data.length;
+                entropy -= p * Math.log2(p);
+            }
+        }
+        
+        const entStr = entropy.toFixed(3);
+        const entEl = document.getElementById('fileEntropy');
+        entEl.textContent = entStr;
+        
+        if(entropy > 7.5) {
+            entEl.className = "text-xs font-mono text-red-400 font-bold";
+            entEl.title = "High Entropy: Likely compressed or encrypted (common in malware)";
+        } else {
+            entEl.className = "text-xs font-mono text-green-400";
+        }
+        analysisData.entropy = entropy;
+    }
+
+    // --- 3. Header & Hex ---
     function analyzeHeader(buffer) {
         const uint8 = new Uint8Array(buffer);
-        const headerStr = new TextDecoder().decode(uint8.slice(0, 20));
         
-        // Version Extraction
-        const versionMatch = headerStr.match(/%PDF-(\d\.\d)/);
-        const version = versionMatch ? versionMatch[1] : "Unknown";
-        document.getElementById('pdfVersion').textContent = version;
-        analysisData.version = version;
-
         // Hex View (First 512 bytes)
         const hexGrid = document.getElementById('hexView');
         hexGrid.innerHTML = '';
         const limit = Math.min(uint8.length, 512);
         
-        let rowHex = '';
-        let rowAscii = '';
-        
         for(let i=0; i<limit; i+=16) {
-            const offset = i.toString(16).padStart(4, '0');
+            const offset = i.toString(16).padStart(4, '0').toUpperCase();
             const slice = uint8.slice(i, i+16);
             
             let hexStr = '';
             let asciiStr = '';
             
             slice.forEach(byte => {
-                hexStr += byte.toString(16).padStart(2, '0') + ' ';
+                hexStr += byte.toString(16).padStart(2, '0').toUpperCase() + ' ';
                 asciiStr += (byte > 31 && byte < 127) ? String.fromCharCode(byte) : '.';
             });
             
-            hexGrid.innerHTML += `<div class="text-cyan-400">${offset}</div><div><span class="mr-4">${hexStr}</span><span class="text-gray-500 border-l border-gray-700 pl-2">${asciiStr}</span></div>`;
+            hexGrid.innerHTML += `
+                <div class="text-cyan-500/70 select-none">${offset}</div>
+                <div class="flex gap-4">
+                    <span class="font-mono text-gray-300 w-[300px]">${hexStr}</span>
+                    <span class="font-mono text-gray-500 border-l border-gray-700 pl-4 opacity-70">${asciiStr}</span>
+                </div>`;
         }
     }
 
-    // --- 3. Metadata ---
+    // --- 4. Metadata ---
     function renderMetadata(data) {
         const tbody = document.getElementById('metaTableBody');
         tbody.innerHTML = '';
         const info = data.info || {};
         analysisData.metadata = info;
 
+        if(Object.keys(info).length === 0) {
+            tbody.innerHTML = '<tr><td class="p-3 text-gray-500 italic">No standard metadata found.</td></tr>';
+        }
+
         for (const [key, val] of Object.entries(info)) {
             let displayVal = val;
             if(key.includes('Date')) displayVal = parsePDFDate(val);
             
             tbody.innerHTML += `
-                <tr class="hover:bg-gray-800/50 transition">
-                    <td class="p-3 font-mono text-cyan-400 w-1/3 border-r border-gray-800">${key}</td>
-                    <td class="p-3 text-gray-300 break-all">${displayVal}</td>
+                <tr class="hover:bg-gray-800/30 transition">
+                    <td class="p-3 font-mono text-cyan-400 w-1/3 border-r border-gray-800/50 text-xs">${key}</td>
+                    <td class="p-3 text-gray-300 break-all text-xs">${displayVal}</td>
                 </tr>
             `;
         }
@@ -496,7 +568,7 @@
         analysisData.xmp = xmp;
     }
 
-    // --- 4. Deep Structure (The Bug Fix is Here) ---
+    // --- 5. Deep Structure ---
     async function analyzeDeepStructure(pdf) {
         const fonts = new Set();
         const links = new Set();
@@ -508,50 +580,56 @@
         tbody.innerHTML = '';
 
         // Limit scan to avoid browser crash on massive files
-        const limit = Math.min(pdf.numPages, 20); 
+        const limit = Math.min(pdf.numPages, 50); 
         document.getElementById('stat-pages').textContent = pdf.numPages;
 
         for (let i = 1; i <= limit; i++) {
-            const page = await pdf.getPage(i);
-            
-            // A. Font Extraction (The Fix: Use getTextContent().styles)
-            const textContent = await page.getTextContent();
-            if (textContent.styles) {
-                for (const [fontName, fontObj] of Object.entries(textContent.styles)) {
-                    fonts.add(fontObj.fontFamily || fontName);
+            try {
+                const page = await pdf.getPage(i);
+                
+                // A. Font Extraction
+                const textContent = await page.getTextContent();
+                if (textContent.styles) {
+                    for (const [fontName, fontObj] of Object.entries(textContent.styles)) {
+                        fonts.add(fontObj.fontFamily || fontName);
+                    }
                 }
+
+                // B. Image Counting (Robust)
+                try {
+                    const ops = await page.getOperatorList();
+                    for(let j=0; j<ops.fnArray.length; j++) {
+                        if(ops.fnArray[j] === pdfjsLib.OPS.paintImageXObject || ops.fnArray[j] === pdfjsLib.OPS.paintInlineImageXObject) {
+                            totalImages++;
+                        }
+                    }
+                } catch(e) { console.warn(`Skipping ops for page ${i}`); }
+
+                // C. PII Extraction
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                extractPII(pageText, emails, ips);
+
+                // D. Links
+                const annotations = await page.getAnnotations();
+                annotations.forEach(ann => {
+                    if (ann.url) links.add(ann.url);
+                    if (ann.unsafeUrl) links.add(ann.unsafeUrl);
+                });
+
+                // E. Geometry
+                const view = page.view; 
+                tbody.innerHTML += `
+                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/30">
+                        <td class="p-3 text-cyan-400">${i}</td>
+                        <td class="p-3">${view[2].toFixed(0)} x ${view[3].toFixed(0)}</td>
+                        <td class="p-3">${page.rotate}°</td>
+                        <td class="p-3 text-gray-500 text-[10px]">${textContent.items.length} text items</td>
+                    </tr>
+                `;
+            } catch (pageErr) {
+                console.error(`Error scanning page ${i}`, pageErr);
+                tbody.innerHTML += `<tr><td colspan="4" class="p-3 text-red-400">Error reading page ${i}</td></tr>`;
             }
-
-            // B. Image Counting (via OperatorList)
-            const ops = await page.getOperatorList();
-            // PDF.js internal op codes for images: paintImageXObject (85), paintInlineImageXObject (82)
-            // Note: This is a heuristic.
-            for(let j=0; j<ops.fnArray.length; j++) {
-                if(ops.fnArray[j] === pdfjsLib.OPS.paintImageXObject || ops.fnArray[j] === pdfjsLib.OPS.paintInlineImageXObject) {
-                    totalImages++;
-                }
-            }
-
-            // C. PII Extraction (Regex on text)
-            const pageText = textContent.items.map(item => item.str).join(' ');
-            extractPII(pageText, emails, ips);
-
-            // D. Links (Annotations)
-            const annotations = await page.getAnnotations();
-            annotations.forEach(ann => {
-                if (ann.url) links.add(ann.url);
-            });
-
-            // E. Geometry Table
-            const view = page.view; // [x, y, w, h]
-            tbody.innerHTML += `
-                <tr class="border-b border-gray-800 hover:bg-gray-800/50">
-                    <td class="p-2 text-cyan-400">${i}</td>
-                    <td class="p-2">${view[2].toFixed(0)} x ${view[3].toFixed(0)}</td>
-                    <td class="p-2">${page.rotate}°</td>
-                    <td class="p-2 text-gray-500 text-[10px]">${textContent.items.length} text items</td>
-                </tr>
-            `;
         }
 
         // Update UI
@@ -559,8 +637,8 @@
         
         const fontDiv = document.getElementById('fontList');
         fontDiv.innerHTML = fonts.size > 0 
-            ? Array.from(fonts).map(f => `<span class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-cyan-400">${f}</span>`).join('')
-            : '<span class="text-gray-500 text-xs">No fonts detected (or text is outlined)</span>';
+            ? Array.from(fonts).map(f => `<span class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-[10px] text-cyan-400">${f}</span>`).join('')
+            : '<span class="text-gray-500 text-xs">No fonts detected</span>';
 
         renderList('linkList', links, 'text-blue-400');
         renderList('piiList', [...emails, ...ips], 'text-green-400');
@@ -571,7 +649,7 @@
         if(attachments) {
             const names = Object.keys(attachments);
             attachDiv.innerHTML = names.length > 0 
-                ? names.map(n => `<div class="p-2 bg-gray-800 mb-1 rounded border border-gray-700 flex items-center gap-2"><i class="fa-solid fa-paperclip"></i> ${n}</div>`).join('')
+                ? names.map(n => `<div class="p-2 bg-gray-800 mb-1 rounded border border-gray-700 flex items-center gap-2 text-xs"><i class="fa-solid fa-paperclip"></i> ${n}</div>`).join('')
                 : "No embedded files.";
         } else {
             attachDiv.textContent = "No embedded files.";
@@ -580,74 +658,90 @@
         analysisData.structure = { fonts: [...fonts], images: totalImages, links: [...links] };
     }
 
-    // --- 5. Threat Analysis (Regex on Binary) ---
+    // --- 6. Threat Analysis (Chunked Regex) ---
     function analyzeThreats(buffer) {
-        // We use a Latin1 decoder to preserve byte mapping 1:1
         const decoder = new TextDecoder("latin1");
-        // Only scan first 5MB and last 1MB to prevent crash on huge files
         const uint8 = new Uint8Array(buffer);
+        
+        // Strategy: Scan Header (2MB) + Trailer (2MB) + Sliding Window for keywords
+        // This prevents OOM on large files
+        
+        const HEAD_SIZE = 2 * 1024 * 1024;
         let rawString = "";
         
-        if(uint8.length > 6000000) {
-            rawString = decoder.decode(uint8.slice(0, 5000000)) + decoder.decode(uint8.slice(uint8.length - 1000000));
+        if(uint8.length > HEAD_SIZE * 2) {
+            rawString = decoder.decode(uint8.slice(0, HEAD_SIZE)) + 
+                        decoder.decode(uint8.slice(uint8.length - HEAD_SIZE));
         } else {
             rawString = decoder.decode(uint8);
         }
 
         const risks = [];
+        let riskScore = 0;
         
         // 1. Incremental Updates
         const eofCount = (rawString.match(/%%EOF/g) || []).length;
-        document.getElementById('stat-updates').textContent = eofCount;
         const modDiv = document.getElementById('modHistory');
         if (eofCount > 1) {
-            modDiv.innerHTML = `<span class="text-yellow-400 font-bold">WARNING: ${eofCount} EOF markers found.</span><br>This file has been modified and saved ${eofCount} times. Previous versions may exist in the file slack space.`;
-            risks.push({ level: 'medium', msg: 'Incremental Updates Detected (History present)' });
+            modDiv.innerHTML = `<div class="flex items-center gap-3"><div class="text-3xl font-bold text-orange-400">${eofCount}</div><div><div class="font-bold text-white">Versions Detected</div><div class="text-xs text-gray-400">File has been saved multiple times.</div></div></div>`;
+            risks.push({ level: 'medium', msg: `Incremental Updates (${eofCount} versions)` });
+            riskScore += 2;
         } else {
-            modDiv.innerHTML = `<span class="text-green-400">Clean.</span> Only 1 EOF marker found (Original creation).`;
+            modDiv.innerHTML = `<div class="text-green-400 font-bold"><i class="fa-solid fa-check-circle mr-2"></i>Original Version (1 EOF)</div>`;
         }
 
         // 2. Suspicious Keywords
         const checks = [
-            { key: '/JavaScript', msg: 'Embedded JavaScript', level: 'high' },
-            { key: '/JS', msg: 'Embedded JS Shortcode', level: 'high' },
-            { key: '/OpenAction', msg: 'Auto-Execution (OpenAction)', level: 'high' },
-            { key: '/AA', msg: 'Auto-Action (AA)', level: 'high' },
-            { key: '/Launch', msg: 'Launch External Program', level: 'high' },
-            { key: '/URI', msg: 'External URI Links', level: 'low' },
-            { key: '/SubmitForm', msg: 'Form Data Submission', level: 'medium' },
-            { key: '/RichMedia', msg: 'Embedded Rich Media (Flash/3D)', level: 'medium' }
+            { key: '/JavaScript', msg: 'Embedded JavaScript', level: 'high', score: 5 },
+            { key: '/JS', msg: 'Embedded JS Shortcode', level: 'high', score: 5 },
+            { key: '/OpenAction', msg: 'Auto-Execution (OpenAction)', level: 'high', score: 5 },
+            { key: '/AA', msg: 'Auto-Action (AA)', level: 'high', score: 5 },
+            { key: '/Launch', msg: 'Launch External Program', level: 'high', score: 10 },
+            { key: '/URI', msg: 'External URI Links', level: 'low', score: 1 },
+            { key: '/SubmitForm', msg: 'Form Data Submission', level: 'medium', score: 3 },
+            { key: '/RichMedia', msg: 'Embedded Rich Media (Flash/3D)', level: 'medium', score: 3 },
+            { key: '/ObjStm', msg: 'Object Streams (Hides structure)', level: 'low', score: 1 }
         ];
 
         checks.forEach(check => {
             if(rawString.includes(check.key)) {
                 risks.push(check);
+                riskScore += check.score;
             }
         });
 
+        // Render Risks
         const resultsDiv = document.getElementById('threatResults');
         resultsDiv.innerHTML = '';
         
         if(risks.length === 0) {
-            resultsDiv.innerHTML = '<div class="p-3 bg-green-900/20 border border-green-800 rounded text-green-400 text-sm"><i class="fa-solid fa-check-circle mr-2"></i>No standard threats detected.</div>';
+            resultsDiv.innerHTML = '<div class="p-4 bg-green-900/20 border border-green-800 rounded text-green-400 text-sm flex items-center"><i class="fa-solid fa-shield-check mr-3 text-xl"></i>No standard threats detected in header/trailer.</div>';
         } else {
             risks.forEach(r => {
-                const color = r.level === 'high' ? 'text-red-400 border-red-900/50 bg-red-900/20' : (r.level === 'medium' ? 'text-yellow-400 border-yellow-900/50 bg-yellow-900/20' : 'text-blue-400 border-blue-900/50 bg-blue-900/20');
+                const color = r.level === 'high' ? 'text-red-400 border-red-900/50 bg-red-900/20' : (r.level === 'medium' ? 'text-orange-400 border-orange-900/50 bg-orange-900/20' : 'text-blue-400 border-blue-900/50 bg-blue-900/20');
                 resultsDiv.innerHTML += `
-                    <div class="flex justify-between items-center p-3 rounded border ${color}">
-                        <span class="text-sm font-bold"><i class="fa-solid fa-triangle-exclamation mr-2"></i>${r.msg}</span>
-                        <span class="text-[10px] uppercase font-bold px-2 py-1 bg-black/30 rounded">${r.level}</span>
+                    <div class="flex justify-between items-center p-3 rounded border ${color} mb-2">
+                        <span class="text-xs font-bold flex items-center"><i class="fa-solid fa-triangle-exclamation mr-2"></i>${r.msg}</span>
+                        <span class="text-[9px] uppercase font-bold px-2 py-1 bg-black/30 rounded tracking-wider">${r.level}</span>
                     </div>
                 `;
             });
         }
+
+        // Update Risk Score UI
+        const riskEl = document.getElementById('stat-risk');
+        riskEl.textContent = riskScore + "/10";
+        if(riskScore > 5) riskEl.className = "text-3xl font-bold text-red-500 mt-1";
+        else if(riskScore > 0) riskEl.className = "text-3xl font-bold text-orange-400 mt-1";
+        else riskEl.className = "text-3xl font-bold text-green-400 mt-1";
+
         analysisData.risks = risks;
     }
 
     // --- Helpers ---
     function extractPII(text, emailSet, ipSet) {
         const emailRegex = /[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}/g;
-        const ipRegex = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g;
+        const ipRegex = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g;
         
         const foundEmails = text.match(emailRegex);
         if(foundEmails) foundEmails.forEach(e => emailSet.add(e));
@@ -661,10 +755,10 @@
         div.innerHTML = '';
         const arr = Array.from(setOrArray);
         if(arr.length === 0) {
-            div.innerHTML = '<span class="text-gray-600 italic">None detected</span>';
+            div.innerHTML = '<span class="text-gray-600 italic text-xs">None detected</span>';
         } else {
             arr.forEach(item => {
-                div.innerHTML += `<div class="break-all border-b border-gray-800 pb-1 mb-1 ${colorClass}">${item}</div>`;
+                div.innerHTML += `<div class="break-all border-b border-gray-800 pb-1 mb-1 ${colorClass} hover:bg-gray-800/50 px-1 rounded cursor-pointer select-all">${item}</div>`;
             });
         }
     }
@@ -672,7 +766,6 @@
     function parsePDFDate(dateStr) {
         if (!dateStr || !dateStr.startsWith('D:')) return dateStr;
         try {
-            // Format: D:YYYYMMDDHHmmSSOHH'mm'
             const raw = dateStr.slice(2);
             const y = raw.slice(0,4);
             const m = raw.slice(4,6);
@@ -680,11 +773,7 @@
             const h = raw.slice(8,10);
             const min = raw.slice(10,12);
             const s = raw.slice(12,14);
-            
-            // Basic formatting
             let formatted = `${y}-${m}-${d} ${h}:${min}:${s}`;
-            
-            // Check for timezone info
             if(raw.length > 14) {
                 const tz = raw.slice(14).replace("'", ":").replace("'", "");
                 formatted += ` (UTC${tz})`;
