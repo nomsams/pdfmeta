@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSINT PDF Forensic Analyzer</title>
+    <title>OSINT PDF Forensic Suite v3.0</title>
     
-    <!-- Tailwind CSS for Professional UI -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -14,7 +14,8 @@
                 extend: {
                     colors: {
                         gray: { 850: '#1f2937', 900: '#111827', 950: '#0b0f19' },
-                        cyan: { 450: '#22d3ee' }
+                        cyan: { 450: '#22d3ee' },
+                        red: { 450: '#f87171' }
                     },
                     fontFamily: { mono: ['"JetBrains Mono"', 'monospace'] }
                 }
@@ -22,48 +23,56 @@
         }
     </script>
     
-    <!-- PDF.js -->
+    <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    
-    <!-- FontAwesome -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.2/spark-md5.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-track { background: #0b0f19; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
         
         .glass-panel {
-            background: rgba(31, 41, 55, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(75, 85, 99, 0.4);
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(71, 85, 105, 0.4);
         }
         
-        .data-row:nth-child(odd) { background-color: rgba(255,255,255,0.02); }
-        .data-row:hover { background-color: rgba(34, 211, 238, 0.05); }
+        .hex-grid {
+            display: grid;
+            grid-template-columns: 50px 1fr;
+            gap: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+        }
         
-        pre { white-space: pre-wrap; word-wrap: break-word; }
+        .loading-overlay {
+            background: rgba(11, 15, 25, 0.95);
+            backdrop-filter: blur(5px);
+        }
     </style>
 </head>
-<body class="bg-gray-950 text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
+<body class="bg-gray-950 text-gray-200 font-sans h-screen flex flex-col overflow-hidden selection:bg-cyan-400 selection:text-black">
 
     <!-- Navbar -->
-    <nav class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex justify-between items-center shadow-lg z-10">
+    <nav class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex justify-between items-center shadow-lg z-20">
         <div class="flex items-center gap-3">
-            <i class="fa-solid fa-shield-halved text-cyan-400 text-xl"></i>
+            <div class="w-8 h-8 bg-cyan-400/10 rounded flex items-center justify-center border border-cyan-400/30">
+                <i class="fa-solid fa-radar text-cyan-400"></i>
+            </div>
             <div>
-                <h1 class="font-bold text-lg tracking-wide text-white">OSINT <span class="text-cyan-400">PDF ANALYZER</span></h1>
-                <p class="text-xs text-gray-500">Client-Side Forensic Tool v2.0</p>
+                <h1 class="font-bold text-lg tracking-wide text-white">OSINT <span class="text-cyan-400">FORENSICS</span></h1>
+                <p class="text-[10px] text-gray-500 uppercase tracking-wider">Client-Side PDF Analyzer</p>
             </div>
         </div>
         <div class="flex gap-3">
-            <button onclick="exportReport()" id="btnExport" class="hidden px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-sm transition">
-                <i class="fa-solid fa-download mr-2"></i>Export JSON
+            <button onclick="exportReport()" id="btnExport" class="hidden px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-xs transition flex items-center gap-2">
+                <i class="fa-solid fa-download"></i> JSON Report
             </button>
-            <button onclick="location.reload()" class="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 border border-red-800/50 text-red-200 rounded text-sm transition">
-                <i class="fa-solid fa-trash mr-2"></i>Reset
+            <button onclick="location.reload()" class="px-3 py-1.5 bg-red-900/20 hover:bg-red-900/40 border border-red-800/40 text-red-300 rounded text-xs transition flex items-center gap-2">
+                <i class="fa-solid fa-power-off"></i> Reset
             </button>
         </div>
     </nav>
@@ -71,56 +80,54 @@
     <!-- Main Layout -->
     <div class="flex flex-1 overflow-hidden">
         
-        <!-- Sidebar / Dropzone -->
-        <aside class="w-80 bg-gray-900 border-r border-gray-800 flex flex-col z-10">
-            <div id="dropZone" class="m-4 p-8 border-2 border-dashed border-gray-700 rounded-lg text-center cursor-pointer hover:border-cyan-400 hover:bg-gray-800/50 transition group">
-                <i class="fa-solid fa-file-import text-4xl text-gray-600 group-hover:text-cyan-400 mb-3 transition"></i>
-                <p class="text-sm text-gray-400 font-medium">Drag PDF File Here</p>
-                <p class="text-xs text-gray-600 mt-1">or click to browse</p>
-                <input type="file" id="fileInput" accept=".pdf" class="hidden">
+        <!-- Sidebar -->
+        <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col z-10">
+            <!-- Dropzone -->
+            <div class="p-4">
+                <div id="dropZone" class="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center cursor-pointer hover:border-cyan-400 hover:bg-gray-800/50 transition group relative overflow-hidden">
+                    <div class="absolute inset-0 bg-cyan-400/5 opacity-0 group-hover:opacity-100 transition"></div>
+                    <i class="fa-solid fa-file-shield text-3xl text-gray-600 group-hover:text-cyan-400 mb-3 transition"></i>
+                    <p class="text-xs text-gray-400 font-medium">DROP PDF EVIDENCE</p>
+                    <input type="file" id="fileInput" accept=".pdf" class="hidden">
+                </div>
             </div>
 
-            <!-- File Status Card -->
-            <div id="statusCard" class="hidden px-4 pb-4">
-                <div class="bg-gray-800 rounded p-3 border border-gray-700">
-                    <div class="flex items-center gap-3 mb-2">
-                        <div class="w-10 h-10 bg-red-500/20 text-red-400 rounded flex items-center justify-center">
-                            <i class="fa-solid fa-file-pdf text-xl"></i>
-                        </div>
-                        <div class="overflow-hidden">
-                            <h3 id="fileName" class="font-bold text-sm truncate">filename.pdf</h3>
-                            <p id="fileSize" class="text-xs text-gray-400">0 KB</p>
-                        </div>
+            <!-- File Info (Hidden until loaded) -->
+            <div id="fileInfoPanel" class="hidden px-4 pb-4 border-b border-gray-800">
+                <div class="text-xs text-gray-500 mb-1">FILENAME</div>
+                <div id="fileName" class="text-sm font-bold text-white truncate mb-3"></div>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-gray-800 p-2 rounded border border-gray-700">
+                        <div class="text-[10px] text-gray-500">SIZE</div>
+                        <div id="fileSize" class="text-xs font-mono text-cyan-400"></div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mt-3">
-                        <div class="bg-gray-900 p-2 rounded text-center">
-                            <div class="text-xs text-gray-500">Pages</div>
-                            <div id="pageCount" class="font-mono text-cyan-400 font-bold">-</div>
-                        </div>
-                        <div class="bg-gray-900 p-2 rounded text-center">
-                            <div class="text-xs text-gray-500">PDF Ver</div>
-                            <div id="pdfVersion" class="font-mono text-cyan-400 font-bold">-</div>
-                        </div>
+                    <div class="bg-gray-800 p-2 rounded border border-gray-700">
+                        <div class="text-[10px] text-gray-500">VERSION</div>
+                        <div id="pdfVersion" class="text-xs font-mono text-cyan-400"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Navigation Tabs -->
-            <div id="navTabs" class="hidden flex-1 overflow-y-auto py-2">
-                <button onclick="showTab('overview')" class="w-full text-left px-6 py-3 text-sm hover:bg-gray-800 border-l-4 border-transparent hover:border-cyan-400 active-tab" id="btn-overview">
-                    <i class="fa-solid fa-chart-pie w-6"></i> Overview & Hashes
+            <!-- Navigation -->
+            <div id="navTabs" class="hidden flex-1 overflow-y-auto py-2 space-y-1">
+                <button onclick="switchTab('overview')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400 active-tab" id="btn-overview">
+                    <i class="fa-solid fa-chart-network w-6"></i> Overview & Hashes
                 </button>
-                <button onclick="showTab('metadata')" class="w-full text-left px-6 py-3 text-sm hover:bg-gray-800 border-l-4 border-transparent hover:border-cyan-400" id="btn-metadata">
-                    <i class="fa-solid fa-list w-6"></i> Metadata & XMP
+                <button onclick="switchTab('metadata')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-metadata">
+                    <i class="fa-solid fa-tags w-6"></i> Metadata & XMP
                 </button>
-                <button onclick="showTab('content')" class="w-full text-left px-6 py-3 text-sm hover:bg-gray-800 border-l-4 border-transparent hover:border-cyan-400" id="btn-content">
+                <button onclick="switchTab('threats')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-threats">
+                    <i class="fa-solid fa-bug w-6"></i> Threat Analysis
+                </button>
+                <button onclick="switchTab('content')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-content">
                     <i class="fa-solid fa-magnifying-glass w-6"></i> Content & PII
                 </button>
-                <button onclick="showTab('structure')" class="w-full text-left px-6 py-3 text-sm hover:bg-gray-800 border-l-4 border-transparent hover:border-cyan-400" id="btn-structure">
-                    <i class="fa-solid fa-code-branch w-6"></i> Structure & Fonts
+                <button onclick="switchTab('structure')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-structure">
+                    <i class="fa-solid fa-layer-group w-6"></i> Structure & Fonts
                 </button>
-                <button onclick="showTab('security')" class="w-full text-left px-6 py-3 text-sm hover:bg-gray-800 border-l-4 border-transparent hover:border-cyan-400" id="btn-security">
-                    <i class="fa-solid fa-lock w-6"></i> Security & Threats
+                <button onclick="switchTab('hex')" class="nav-btn w-full text-left px-6 py-3 text-sm border-l-2 border-transparent hover:bg-gray-800 text-gray-400" id="btn-hex">
+                    <i class="fa-solid fa-binary w-6"></i> Hex Header
                 </button>
             </div>
         </aside>
@@ -128,117 +135,166 @@
         <!-- Content Area -->
         <main class="flex-1 bg-gray-950 relative overflow-y-auto p-8">
             
-            <!-- Loading Overlay -->
-            <div id="loading" class="hidden absolute inset-0 bg-gray-950/90 z-50 flex flex-col items-center justify-center">
-                <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-cyan-400 mb-4"></div>
-                <h2 class="text-xl font-bold text-white">Analyzing Document...</h2>
-                <p id="loadingText" class="text-gray-400 text-sm mt-2">Calculating Hashes...</p>
+            <!-- Loading Screen -->
+            <div id="loading" class="hidden absolute inset-0 loading-overlay z-50 flex flex-col items-center justify-center">
+                <div class="relative">
+                    <div class="w-16 h-16 border-4 border-gray-700 border-t-cyan-400 rounded-full animate-spin"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i class="fa-solid fa-eye text-cyan-400 text-sm"></i>
+                    </div>
+                </div>
+                <h2 class="text-xl font-bold text-white mt-6">Forensic Scan In Progress</h2>
+                <p id="loadingText" class="text-gray-400 text-sm mt-2 font-mono">Initializing...</p>
             </div>
 
-            <!-- Welcome Screen -->
-            <div id="welcome" class="h-full flex flex-col items-center justify-center text-gray-600">
-                <i class="fa-solid fa-microscope text-6xl mb-4 opacity-20"></i>
-                <p class="text-lg">Upload a PDF to begin forensic analysis</p>
+            <!-- Empty State -->
+            <div id="welcome" class="h-full flex flex-col items-center justify-center text-gray-600 select-none">
+                <div class="w-24 h-24 bg-gray-900 rounded-full flex items-center justify-center mb-6 border border-gray-800">
+                    <i class="fa-solid fa-fingerprint text-4xl opacity-30"></i>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-500">Ready for Analysis</h2>
+                <p class="text-sm mt-2">Upload a PDF to extract metadata, hashes, and hidden threats.</p>
             </div>
 
             <!-- Tab: Overview -->
             <div id="tab-overview" class="tab-content hidden space-y-6">
-                <h2 class="text-2xl font-bold text-white mb-4 border-b border-gray-800 pb-2">Forensic Overview</h2>
+                <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                    <span class="w-1 h-8 bg-cyan-400 rounded-full"></span> Evidence Overview
+                </h2>
                 
                 <!-- Hashes -->
-                <div class="glass-panel rounded-lg p-5">
-                    <h3 class="text-cyan-400 font-bold text-sm uppercase mb-4"><i class="fa-solid fa-fingerprint mr-2"></i>File Hashes (Evidence Integrity)</h3>
-                    <div class="space-y-3">
-                        <div>
-                            <span class="text-xs text-gray-500 block">MD5</span>
-                            <div class="flex gap-2">
-                                <code id="hash-md5" class="bg-black/30 px-2 py-1 rounded text-xs font-mono text-green-400 flex-1 select-all">Calculating...</code>
+                <div class="glass-panel rounded-lg p-6">
+                    <h3 class="text-cyan-400 font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-hashtag"></i> Cryptographic Hashes
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="group">
+                            <div class="flex justify-between text-xs text-gray-500 mb-1">
+                                <span>MD5 (Legacy)</span>
+                                <span class="opacity-0 group-hover:opacity-100 cursor-pointer text-cyan-400" onclick="copyText('hash-md5')">Copy</span>
                             </div>
+                            <code id="hash-md5" class="block bg-black/40 p-3 rounded border border-gray-800 text-xs font-mono text-green-400 break-all hover:border-gray-600 transition">...</code>
                         </div>
-                        <div>
-                            <span class="text-xs text-gray-500 block">SHA-1</span>
-                            <code id="hash-sha1" class="bg-black/30 px-2 py-1 rounded text-xs font-mono text-green-400 block select-all">Calculating...</code>
+                        <div class="group">
+                            <div class="flex justify-between text-xs text-gray-500 mb-1">
+                                <span>SHA-1</span>
+                                <span class="opacity-0 group-hover:opacity-100 cursor-pointer text-cyan-400" onclick="copyText('hash-sha1')">Copy</span>
+                            </div>
+                            <code id="hash-sha1" class="block bg-black/40 p-3 rounded border border-gray-800 text-xs font-mono text-green-400 break-all hover:border-gray-600 transition">...</code>
                         </div>
-                        <div>
-                            <span class="text-xs text-gray-500 block">SHA-256</span>
-                            <code id="hash-sha256" class="bg-black/30 px-2 py-1 rounded text-xs font-mono text-green-400 block select-all">Calculating...</code>
+                        <div class="group">
+                            <div class="flex justify-between text-xs text-gray-500 mb-1">
+                                <span>SHA-256 (Standard)</span>
+                                <span class="opacity-0 group-hover:opacity-100 cursor-pointer text-cyan-400" onclick="copyText('hash-sha256')">Copy</span>
+                            </div>
+                            <code id="hash-sha256" class="block bg-black/40 p-3 rounded border border-gray-800 text-xs font-mono text-green-400 break-all hover:border-gray-600 transition">...</code>
                         </div>
                     </div>
                 </div>
 
-                <!-- Risk Assessment -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="glass-panel rounded-lg p-5">
-                        <h3 class="text-cyan-400 font-bold text-sm uppercase mb-4"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Risk Indicators</h3>
-                        <ul id="riskList" class="space-y-2 text-sm">
-                            <!-- Populated by JS -->
-                        </ul>
+                <!-- Quick Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="glass-panel p-4 rounded-lg border-l-4 border-l-blue-500">
+                        <div class="text-gray-500 text-xs uppercase">Page Count</div>
+                        <div id="stat-pages" class="text-2xl font-bold text-white mt-1">-</div>
                     </div>
-                    <div class="glass-panel rounded-lg p-5">
-                        <h3 class="text-cyan-400 font-bold text-sm uppercase mb-4"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Modification History</h3>
-                        <div id="modHistory" class="text-sm text-gray-300">
-                            <!-- Populated by JS -->
-                        </div>
+                    <div class="glass-panel p-4 rounded-lg border-l-4 border-l-purple-500">
+                        <div class="text-gray-500 text-xs uppercase">Images Detected</div>
+                        <div id="stat-images" class="text-2xl font-bold text-white mt-1">-</div>
+                    </div>
+                    <div class="glass-panel p-4 rounded-lg border-l-4 border-l-yellow-500">
+                        <div class="text-gray-500 text-xs uppercase">Modifications</div>
+                        <div id="stat-updates" class="text-2xl font-bold text-white mt-1">-</div>
                     </div>
                 </div>
             </div>
 
             <!-- Tab: Metadata -->
             <div id="tab-metadata" class="tab-content hidden space-y-6">
-                <h2 class="text-2xl font-bold text-white mb-4 border-b border-gray-800 pb-2">Metadata Extraction</h2>
-                
+                <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                    <span class="w-1 h-8 bg-purple-500 rounded-full"></span> Metadata
+                </h2>
+
                 <div class="glass-panel rounded-lg overflow-hidden">
-                    <div class="bg-gray-900 px-4 py-2 border-b border-gray-800 font-bold text-sm text-gray-400">Standard Info Dictionary</div>
+                    <div class="bg-gray-900/50 px-4 py-3 border-b border-gray-800 font-bold text-xs text-gray-400 uppercase">
+                        Standard Info Dictionary
+                    </div>
                     <table class="w-full text-sm text-left">
-                        <tbody id="metaTableBody"></tbody>
+                        <tbody id="metaTableBody" class="divide-y divide-gray-800"></tbody>
                     </table>
                 </div>
 
                 <div class="glass-panel rounded-lg p-4">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="font-bold text-sm text-gray-400">XMP Metadata (Raw XML)</h3>
-                        <button onclick="copyXMP()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">Copy</button>
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-bold text-xs text-gray-400 uppercase">XMP Metadata (Raw XML)</h3>
+                        <button onclick="copyText('xmpBox')" class="text-xs bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">Copy XML</button>
                     </div>
-                    <pre id="xmpBox" class="bg-black/30 p-4 rounded text-xs font-mono text-blue-300 h-64 overflow-y-auto select-all"></pre>
+                    <pre id="xmpBox" class="bg-black/40 p-4 rounded border border-gray-800 text-xs font-mono text-blue-300 h-80 overflow-y-auto whitespace-pre-wrap"></pre>
+                </div>
+            </div>
+
+            <!-- Tab: Threats -->
+            <div id="tab-threats" class="tab-content hidden space-y-6">
+                <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                    <span class="w-1 h-8 bg-red-500 rounded-full"></span> Threat Analysis
+                </h2>
+
+                <div class="glass-panel rounded-lg p-6">
+                    <h3 class="text-red-400 font-bold text-xs uppercase tracking-wider mb-4">
+                        <i class="fa-solid fa-shield-virus mr-2"></i> Active Content Scan
+                    </h3>
+                    <div id="threatResults" class="space-y-2">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="glass-panel rounded-lg p-6">
+                    <h3 class="text-yellow-400 font-bold text-xs uppercase tracking-wider mb-4">
+                        <i class="fa-solid fa-clock-rotate-left mr-2"></i> Modification History (Incremental Updates)
+                    </h3>
+                    <p class="text-sm text-gray-400 mb-4">PDFs can be saved incrementally. Multiple EOF markers indicate the file was edited and resaved, potentially hiding previous versions.</p>
+                    <div id="modHistory" class="text-sm font-mono bg-black/30 p-3 rounded border border-gray-800"></div>
                 </div>
             </div>
 
             <!-- Tab: Content -->
             <div id="tab-content" class="tab-content hidden space-y-6">
-                <h2 class="text-2xl font-bold text-white mb-4 border-b border-gray-800 pb-2">Content Analysis</h2>
+                <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                    <span class="w-1 h-8 bg-green-500 rounded-full"></span> Content & PII
+                </h2>
                 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Extracted Links -->
-                    <div class="glass-panel rounded-lg p-5 h-96 flex flex-col">
-                        <h3 class="text-cyan-400 font-bold text-sm uppercase mb-2"><i class="fa-solid fa-link mr-2"></i>Hyperlinks & URIs</h3>
-                        <div id="linkList" class="flex-1 overflow-y-auto space-y-1 text-xs font-mono"></div>
+                    <div class="glass-panel rounded-lg p-5 flex flex-col h-[500px]">
+                        <h3 class="text-cyan-400 font-bold text-xs uppercase mb-3">Extracted Hyperlinks</h3>
+                        <div id="linkList" class="flex-1 overflow-y-auto space-y-1 text-xs font-mono pr-2"></div>
                     </div>
 
-                    <!-- Extracted PII -->
-                    <div class="glass-panel rounded-lg p-5 h-96 flex flex-col">
-                        <h3 class="text-cyan-400 font-bold text-sm uppercase mb-2"><i class="fa-solid fa-user-secret mr-2"></i>Potential PII (Emails/IPs)</h3>
-                        <div id="piiList" class="flex-1 overflow-y-auto space-y-1 text-xs font-mono"></div>
+                    <div class="glass-panel rounded-lg p-5 flex flex-col h-[500px]">
+                        <h3 class="text-cyan-400 font-bold text-xs uppercase mb-3">Potential PII (Emails / IPs)</h3>
+                        <div id="piiList" class="flex-1 overflow-y-auto space-y-1 text-xs font-mono pr-2"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Tab: Structure -->
             <div id="tab-structure" class="tab-content hidden space-y-6">
-                <h2 class="text-2xl font-bold text-white mb-4 border-b border-gray-800 pb-2">Internal Structure</h2>
-                
+                <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                    <span class="w-1 h-8 bg-orange-500 rounded-full"></span> Structure
+                </h2>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="glass-panel rounded-lg p-5">
-                        <h3 class="text-cyan-400 font-bold text-sm uppercase mb-2">Fonts Used</h3>
+                        <h3 class="text-gray-400 font-bold text-xs uppercase mb-3">Fonts Used</h3>
                         <div id="fontList" class="flex flex-wrap gap-2"></div>
                     </div>
                     <div class="glass-panel rounded-lg p-5">
-                        <h3 class="text-cyan-400 font-bold text-sm uppercase mb-2">Attachments</h3>
+                        <h3 class="text-gray-400 font-bold text-xs uppercase mb-3">Embedded Files</h3>
                         <div id="attachmentList" class="text-sm text-gray-400"></div>
                     </div>
                 </div>
 
                 <div class="glass-panel rounded-lg p-5">
-                    <h3 class="text-cyan-400 font-bold text-sm uppercase mb-2">Page Geometry (MediaBox vs CropBox)</h3>
+                    <h3 class="text-gray-400 font-bold text-xs uppercase mb-3">Page Geometry</h3>
                     <div class="overflow-x-auto">
                         <table class="w-full text-xs text-left">
                             <thead class="text-gray-500 border-b border-gray-700">
@@ -246,24 +302,22 @@
                                     <th class="p-2">Page</th>
                                     <th class="p-2">Size (pts)</th>
                                     <th class="p-2">Rotation</th>
-                                    <th class="p-2">Hidden Content Risk</th>
+                                    <th class="p-2">Objects</th>
                                 </tr>
                             </thead>
-                            <tbody id="pageGeoBody" class="font-mono"></tbody>
+                            <tbody id="pageGeoBody" class="font-mono text-gray-300"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- Tab: Security -->
-            <div id="tab-security" class="tab-content hidden space-y-6">
-                <h2 class="text-2xl font-bold text-white mb-4 border-b border-gray-800 pb-2">Security & Threats</h2>
-                
-                <div class="glass-panel rounded-lg p-5">
-                    <h3 class="text-red-400 font-bold text-sm uppercase mb-4">Active Content Scan</h3>
-                    <div id="securityScanResults" class="space-y-3">
-                        <!-- Populated by JS -->
-                    </div>
+            <!-- Tab: Hex -->
+            <div id="tab-hex" class="tab-content hidden space-y-6">
+                <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                    <span class="w-1 h-8 bg-gray-500 rounded-full"></span> Raw Header (First 1KB)
+                </h2>
+                <div class="glass-panel rounded-lg p-4">
+                    <div id="hexView" class="hex-grid text-gray-400"></div>
                 </div>
             </div>
 
@@ -271,12 +325,11 @@
     </div>
 
 <script>
-    // --- Configuration & Globals ---
+    // --- Configuration ---
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     
-    let currentPDF = null;
-    let rawPDFData = null; // ArrayBuffer
-    let analysisReport = {}; // Store data for export
+    let analysisData = {}; 
+    let rawPDFBuffer = null;
 
     // --- UI Logic ---
     const dropZone = document.getElementById('dropZone');
@@ -284,330 +337,370 @@
     const loading = document.getElementById('loading');
     const loadingText = document.getElementById('loadingText');
 
-    // Drag & Drop
     dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-cyan-400', 'bg-gray-800'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-cyan-400', 'bg-gray-800'));
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('border-cyan-400', 'bg-gray-800');
-        if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-    });
-    fileInput.addEventListener('change', () => { if(fileInput.files.length) handleFile(fileInput.files[0]); });
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); });
+    dropZone.addEventListener('drop', (e) => { e.preventDefault(); if(e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]); });
+    fileInput.addEventListener('change', () => { if(fileInput.files.length) processFile(fileInput.files[0]); });
 
-    function showTab(tabName) {
+    function switchTab(tabId) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-        document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+        document.getElementById(`tab-${tabId}`).classList.remove('hidden');
         
-        document.querySelectorAll('#navTabs button').forEach(btn => {
+        document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.classList.remove('border-cyan-400', 'bg-gray-800', 'text-white');
             btn.classList.add('border-transparent', 'text-gray-400');
         });
-        const activeBtn = document.getElementById(`btn-${tabName}`);
+        const activeBtn = document.getElementById(`btn-${tabId}`);
         activeBtn.classList.add('border-cyan-400', 'bg-gray-800', 'text-white');
         activeBtn.classList.remove('border-transparent', 'text-gray-400');
     }
 
-    // --- Core Processing ---
-    async function handleFile(file) {
-        if(file.type !== 'application/pdf') { alert('Not a PDF file'); return; }
+    function copyText(elementId) {
+        const text = document.getElementById(elementId).innerText;
+        navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard'));
+    }
+
+    // --- Main Processor ---
+    async function processFile(file) {
+        if(file.type !== 'application/pdf') { alert('Please upload a valid PDF file.'); return; }
 
         // Reset UI
         document.getElementById('welcome').classList.add('hidden');
-        document.getElementById('statusCard').classList.remove('hidden');
         document.getElementById('navTabs').classList.remove('hidden');
+        document.getElementById('fileInfoPanel').classList.remove('hidden');
         document.getElementById('btnExport').classList.remove('hidden');
         loading.classList.remove('hidden');
-        
-        // Basic File Info
+
+        // Basic Info
         document.getElementById('fileName').textContent = file.name;
         document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(2) + ' KB';
-        analysisReport = { filename: file.name, size: file.size, timestamp: new Date().toISOString() };
+        analysisData = { filename: file.name, size: file.size, timestamp: new Date().toISOString() };
 
         try {
-            rawPDFData = await file.arrayBuffer();
+            rawPDFBuffer = await file.arrayBuffer();
             
-            // 1. Calculate Hashes (Web Crypto API)
+            // 1. Hashes
             loadingText.textContent = "Calculating Cryptographic Hashes...";
-            await calculateHashes(rawPDFData);
+            await calculateHashes(rawPDFBuffer);
 
-            // 2. Load PDF
+            // 2. Raw Header Analysis (Version & Hex)
+            loadingText.textContent = "Analyzing Binary Header...";
+            analyzeHeader(rawPDFBuffer);
+
+            // 3. Load PDF
             loadingText.textContent = "Parsing PDF Structure...";
-            const loadingTask = pdfjsLib.getDocument(rawPDFData);
-            currentPDF = await loadingTask.promise;
+            const loadingTask = pdfjsLib.getDocument(rawPDFBuffer);
+            const pdfDoc = await loadingTask.promise;
             
-            document.getElementById('pageCount').textContent = currentPDF.numPages;
-            document.getElementById('pdfVersion').textContent = "1.7"; // PDF.js usually handles 1.7, exact version requires raw header read
+            // 4. Metadata
+            const metadata = await pdfDoc.getMetadata();
+            renderMetadata(metadata);
 
-            // 3. Extract Metadata
-            const metaData = await currentPDF.getMetadata();
-            renderMetadata(metaData);
+            // 5. Deep Scan (Pages, Fonts, Images, PII)
+            loadingText.textContent = "Deep Scanning Pages & Content...";
+            await analyzeDeepStructure(pdfDoc);
 
-            // 4. Security & Raw Analysis
+            // 6. Threat Scan (Regex on raw string)
             loadingText.textContent = "Scanning for Threats...";
-            const rawText = new TextDecoder("latin1").decode(rawPDFData); // Latin1 preserves binary byte mapping 1:1
-            analyzeRawBinary(rawText);
+            analyzeThreats(rawPDFBuffer);
 
-            // 5. Content Analysis (Text & Links)
-            loadingText.textContent = "Extracting Content & PII...";
-            await analyzeContent(currentPDF);
+            switchTab('overview');
 
-            // 6. Structure
-            await analyzeStructure(currentPDF);
-
-            showTab('overview');
         } catch (err) {
             console.error(err);
-            alert("Error analyzing PDF: " + err.message);
+            alert(`Error analyzing PDF: ${err.message}`);
         } finally {
             loading.classList.add('hidden');
         }
     }
 
-    // --- 1. Hashing ---
+    // --- 1. Hashing (MD5, SHA1, SHA256) ---
     async function calculateHashes(buffer) {
-        const hashBufferToHex = (buffer) => {
-            return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-        };
-
-        const md5 = "Not supported in pure WebCrypto (use library if needed)"; // MD5 is weak, skipping for pure JS simplicity or use SparkMD5 if strictly required.
-        // Note: WebCrypto doesn't support MD5. We will do SHA-1 and SHA-256.
+        // MD5 via SparkMD5
+        const spark = new SparkMD5.ArrayBuffer();
+        spark.append(buffer);
+        const md5 = spark.end();
         
+        // SHA via WebCrypto
         const sha1Buf = await crypto.subtle.digest('SHA-1', buffer);
         const sha256Buf = await crypto.subtle.digest('SHA-256', buffer);
+        
+        const toHex = (buf) => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        const sha1 = toHex(sha1Buf);
+        const sha256 = toHex(sha256Buf);
 
-        const sha1 = hashBufferToHex(sha1Buf);
-        const sha256 = hashBufferToHex(sha256Buf);
-
-        document.getElementById('hash-md5').textContent = "Requires ext lib"; // Placeholder
+        document.getElementById('hash-md5').textContent = md5;
         document.getElementById('hash-sha1').textContent = sha1;
         document.getElementById('hash-sha256').textContent = sha256;
 
-        analysisReport.hashes = { sha1, sha256 };
+        analysisData.hashes = { md5, sha1, sha256 };
     }
 
-    // --- 2. Metadata ---
+    // --- 2. Header & Hex ---
+    function analyzeHeader(buffer) {
+        const uint8 = new Uint8Array(buffer);
+        const headerStr = new TextDecoder().decode(uint8.slice(0, 20));
+        
+        // Version Extraction
+        const versionMatch = headerStr.match(/%PDF-(\d\.\d)/);
+        const version = versionMatch ? versionMatch[1] : "Unknown";
+        document.getElementById('pdfVersion').textContent = version;
+        analysisData.version = version;
+
+        // Hex View (First 512 bytes)
+        const hexGrid = document.getElementById('hexView');
+        hexGrid.innerHTML = '';
+        const limit = Math.min(uint8.length, 512);
+        
+        let rowHex = '';
+        let rowAscii = '';
+        
+        for(let i=0; i<limit; i+=16) {
+            const offset = i.toString(16).padStart(4, '0');
+            const slice = uint8.slice(i, i+16);
+            
+            let hexStr = '';
+            let asciiStr = '';
+            
+            slice.forEach(byte => {
+                hexStr += byte.toString(16).padStart(2, '0') + ' ';
+                asciiStr += (byte > 31 && byte < 127) ? String.fromCharCode(byte) : '.';
+            });
+            
+            hexGrid.innerHTML += `<div class="text-cyan-400">${offset}</div><div><span class="mr-4">${hexStr}</span><span class="text-gray-500 border-l border-gray-700 pl-2">${asciiStr}</span></div>`;
+        }
+    }
+
+    // --- 3. Metadata ---
     function renderMetadata(data) {
         const tbody = document.getElementById('metaTableBody');
         tbody.innerHTML = '';
         const info = data.info || {};
-        
-        analysisReport.metadata = info;
+        analysisData.metadata = info;
 
         for (const [key, val] of Object.entries(info)) {
             let displayVal = val;
             if(key.includes('Date')) displayVal = parsePDFDate(val);
             
-            const row = `
-                <tr class="data-row border-b border-gray-800">
-                    <td class="p-3 font-mono text-cyan-400 w-1/3">${key}</td>
+            tbody.innerHTML += `
+                <tr class="hover:bg-gray-800/50 transition">
+                    <td class="p-3 font-mono text-cyan-400 w-1/3 border-r border-gray-800">${key}</td>
                     <td class="p-3 text-gray-300 break-all">${displayVal}</td>
                 </tr>
             `;
-            tbody.innerHTML += row;
         }
 
-        // XMP
         const xmp = data.metadata ? data.metadata.getRaw() : "No XMP Data found.";
         document.getElementById('xmpBox').textContent = xmp;
-        analysisReport.xmp = xmp;
+        analysisData.xmp = xmp;
     }
 
-    // --- 3. Raw Binary Analysis (Forensics) ---
-    function analyzeRawBinary(rawString) {
-        const risks = [];
-        
-        // Check for Incremental Updates (Count %%EOF)
-        const eofCount = (rawString.match(/%%EOF/g) || []).length;
-        const modDiv = document.getElementById('modHistory');
-        if (eofCount > 1) {
-            modDiv.innerHTML = `<span class="text-yellow-400 font-bold">Modified ${eofCount} times.</span><br>This file has incremental updates (saved multiple times).`;
-            risks.push({ level: 'medium', msg: 'File has incremental updates (history present).' });
-        } else {
-            modDiv.innerHTML = `<span class="text-green-400">Original Version.</span><br>Only one EOF marker found.`;
-        }
-
-        // Check for JavaScript
-        if (rawString.includes('/JavaScript') || rawString.includes('/JS')) {
-            risks.push({ level: 'high', msg: 'Embedded JavaScript detected.' });
-        }
-
-        // Check for OpenAction (Auto-run)
-        if (rawString.includes('/OpenAction') || rawString.includes('/AA')) {
-            risks.push({ level: 'high', msg: 'OpenAction (Auto-execute) detected.' });
-        }
-
-        // Check for URI Actions
-        if (rawString.includes('/URI')) {
-            risks.push({ level: 'low', msg: 'Contains external URI links.' });
-        }
-
-        // Render Risks
-        const riskList = document.getElementById('riskList');
-        const secResults = document.getElementById('securityScanResults');
-        riskList.innerHTML = '';
-        secResults.innerHTML = '';
-
-        if (risks.length === 0) {
-            riskList.innerHTML = '<li class="text-green-400"><i class="fa-solid fa-check mr-2"></i>No obvious threats detected.</li>';
-            secResults.innerHTML = '<div class="p-3 bg-green-900/20 border border-green-800 rounded text-green-400">Clean Scan</div>';
-        } else {
-            risks.forEach(r => {
-                const color = r.level === 'high' ? 'text-red-400' : (r.level === 'medium' ? 'text-yellow-400' : 'text-blue-400');
-                riskList.innerHTML += `<li class="${color}"><i class="fa-solid fa-circle-exclamation mr-2"></i>${r.msg}</li>`;
-                
-                secResults.innerHTML += `
-                    <div class="flex justify-between items-center p-2 bg-gray-800 rounded border border-gray-700">
-                        <span class="text-sm text-gray-300">${r.msg}</span>
-                        <span class="text-xs font-bold uppercase ${color}">${r.level}</span>
-                    </div>
-                `;
-            });
-        }
-        analysisReport.risks = risks;
-    }
-
-    // --- 4. Content Analysis (PII & Links) ---
-    async function analyzeContent(pdf) {
+    // --- 4. Deep Structure (The Bug Fix is Here) ---
+    async function analyzeDeepStructure(pdf) {
+        const fonts = new Set();
         const links = new Set();
         const emails = new Set();
         const ips = new Set();
-        const urls = new Set();
-
-        // Regex Patterns
-        const emailRegex = /[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}/g;
-        const ipRegex = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g;
-        const urlRegex = /https?:\/\/[^\s/$.?#].[^\s]*/g;
-
-        // Limit scan to first 20 pages for performance in demo
-        const limit = Math.min(pdf.numPages, 20);
+        let totalImages = 0;
         
+        const tbody = document.getElementById('pageGeoBody');
+        tbody.innerHTML = '';
+
+        // Limit scan to avoid browser crash on massive files
+        const limit = Math.min(pdf.numPages, 20); 
+        document.getElementById('stat-pages').textContent = pdf.numPages;
+
         for (let i = 1; i <= limit; i++) {
             const page = await pdf.getPage(i);
             
-            // 1. Get Annotations (Links)
+            // A. Font Extraction (The Fix: Use getTextContent().styles)
+            const textContent = await page.getTextContent();
+            if (textContent.styles) {
+                for (const [fontName, fontObj] of Object.entries(textContent.styles)) {
+                    fonts.add(fontObj.fontFamily || fontName);
+                }
+            }
+
+            // B. Image Counting (via OperatorList)
+            const ops = await page.getOperatorList();
+            // PDF.js internal op codes for images: paintImageXObject (85), paintInlineImageXObject (82)
+            // Note: This is a heuristic.
+            for(let j=0; j<ops.fnArray.length; j++) {
+                if(ops.fnArray[j] === pdfjsLib.OPS.paintImageXObject || ops.fnArray[j] === pdfjsLib.OPS.paintInlineImageXObject) {
+                    totalImages++;
+                }
+            }
+
+            // C. PII Extraction (Regex on text)
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            extractPII(pageText, emails, ips);
+
+            // D. Links (Annotations)
             const annotations = await page.getAnnotations();
             annotations.forEach(ann => {
                 if (ann.url) links.add(ann.url);
-                if (ann.unsafeUrl) links.add(ann.unsafeUrl);
             });
 
-            // 2. Get Text Content (Regex)
-            const textContent = await page.getTextContent();
-            const text = textContent.items.map(item => item.str).join(' ');
-            
-            const foundEmails = text.match(emailRegex);
-            if(foundEmails) foundEmails.forEach(e => emails.add(e));
-
-            const foundIps = text.match(ipRegex);
-            if(foundIps) foundIps.forEach(ip => ips.add(ip));
-            
-            const foundUrls = text.match(urlRegex);
-            if(foundUrls) foundUrls.forEach(u => urls.add(u));
-        }
-
-        // Render Links
-        const linkDiv = document.getElementById('linkList');
-        linkDiv.innerHTML = '';
-        [...links, ...urls].forEach(l => {
-            linkDiv.innerHTML += `<div class="break-all border-b border-gray-800 pb-1 mb-1 hover:text-cyan-400 cursor-pointer">${l}</div>`;
-        });
-
-        // Render PII
-        const piiDiv = document.getElementById('piiList');
-        piiDiv.innerHTML = '';
-        if(emails.size > 0) {
-            piiDiv.innerHTML += `<div class="text-gray-500 font-bold mb-1">Emails:</div>`;
-            emails.forEach(e => piiDiv.innerHTML += `<div class="text-green-400">${e}</div>`);
-        }
-        if(ips.size > 0) {
-            piiDiv.innerHTML += `<div class="text-gray-500 font-bold mt-2 mb-1">IP Addresses:</div>`;
-            ips.forEach(ip => piiDiv.innerHTML += `<div class="text-yellow-400">${ip}</div>`);
-        }
-        if(emails.size === 0 && ips.size === 0) {
-            piiDiv.innerHTML = '<span class="text-gray-600">No PII detected in scanned pages.</span>';
-        }
-
-        analysisReport.content = {
-            links: [...links],
-            emails: [...emails],
-            ips: [...ips]
-        };
-    }
-
-    // --- 5. Structure ---
-    async function analyzeStructure(pdf) {
-        const fonts = new Set();
-        const tbody = document.getElementById('pageGeoBody');
-        tbody.innerHTML = '';
-        
-        const limit = Math.min(pdf.numPages, 50);
-
-        for (let i = 1; i <= limit; i++) {
-            const page = await pdf.getPage(i);
-            
-            // Fonts
-            page.commonObjs.forEach((obj, key) => {
-                if(obj.name) fonts.add(obj.name);
-            }); // Note: PDF.js font handling is tricky, this is a best effort without deep parsing
-
-            // Geometry
+            // E. Geometry Table
             const view = page.view; // [x, y, w, h]
-            const width = view[2];
-            const height = view[3];
-            
-            // Simple heuristic: If cropbox is significantly smaller than mediabox, risk is higher
-            // PDF.js normalizes view, so we check rotation mostly
-            
             tbody.innerHTML += `
-                <tr class="border-b border-gray-800 hover:bg-gray-800">
+                <tr class="border-b border-gray-800 hover:bg-gray-800/50">
                     <td class="p-2 text-cyan-400">${i}</td>
-                    <td class="p-2">${width.toFixed(0)} x ${height.toFixed(0)}</td>
+                    <td class="p-2">${view[2].toFixed(0)} x ${view[3].toFixed(0)}</td>
                     <td class="p-2">${page.rotate}°</td>
-                    <td class="p-2 text-gray-500">Normal</td>
+                    <td class="p-2 text-gray-500 text-[10px]">${textContent.items.length} text items</td>
                 </tr>
             `;
         }
+
+        // Update UI
+        document.getElementById('stat-images').textContent = totalImages;
+        
+        const fontDiv = document.getElementById('fontList');
+        fontDiv.innerHTML = fonts.size > 0 
+            ? Array.from(fonts).map(f => `<span class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-cyan-400">${f}</span>`).join('')
+            : '<span class="text-gray-500 text-xs">No fonts detected (or text is outlined)</span>';
+
+        renderList('linkList', links, 'text-blue-400');
+        renderList('piiList', [...emails, ...ips], 'text-green-400');
 
         // Attachments
         const attachments = await pdf.getAttachments();
         const attachDiv = document.getElementById('attachmentList');
         if(attachments) {
             const names = Object.keys(attachments);
-            if(names.length > 0) {
-                attachDiv.innerHTML = names.map(n => `<div class="p-2 bg-gray-800 mb-1 rounded border border-gray-700"><i class="fa-solid fa-paperclip mr-2"></i>${n}</div>`).join('');
-            } else {
-                attachDiv.textContent = "No embedded files found.";
-            }
+            attachDiv.innerHTML = names.length > 0 
+                ? names.map(n => `<div class="p-2 bg-gray-800 mb-1 rounded border border-gray-700 flex items-center gap-2"><i class="fa-solid fa-paperclip"></i> ${n}</div>`).join('')
+                : "No embedded files.";
         } else {
-            attachDiv.textContent = "No embedded files found.";
+            attachDiv.textContent = "No embedded files.";
+        }
+
+        analysisData.structure = { fonts: [...fonts], images: totalImages, links: [...links] };
+    }
+
+    // --- 5. Threat Analysis (Regex on Binary) ---
+    function analyzeThreats(buffer) {
+        // We use a Latin1 decoder to preserve byte mapping 1:1
+        const decoder = new TextDecoder("latin1");
+        // Only scan first 5MB and last 1MB to prevent crash on huge files
+        const uint8 = new Uint8Array(buffer);
+        let rawString = "";
+        
+        if(uint8.length > 6000000) {
+            rawString = decoder.decode(uint8.slice(0, 5000000)) + decoder.decode(uint8.slice(uint8.length - 1000000));
+        } else {
+            rawString = decoder.decode(uint8);
+        }
+
+        const risks = [];
+        
+        // 1. Incremental Updates
+        const eofCount = (rawString.match(/%%EOF/g) || []).length;
+        document.getElementById('stat-updates').textContent = eofCount;
+        const modDiv = document.getElementById('modHistory');
+        if (eofCount > 1) {
+            modDiv.innerHTML = `<span class="text-yellow-400 font-bold">WARNING: ${eofCount} EOF markers found.</span><br>This file has been modified and saved ${eofCount} times. Previous versions may exist in the file slack space.`;
+            risks.push({ level: 'medium', msg: 'Incremental Updates Detected (History present)' });
+        } else {
+            modDiv.innerHTML = `<span class="text-green-400">Clean.</span> Only 1 EOF marker found (Original creation).`;
+        }
+
+        // 2. Suspicious Keywords
+        const checks = [
+            { key: '/JavaScript', msg: 'Embedded JavaScript', level: 'high' },
+            { key: '/JS', msg: 'Embedded JS Shortcode', level: 'high' },
+            { key: '/OpenAction', msg: 'Auto-Execution (OpenAction)', level: 'high' },
+            { key: '/AA', msg: 'Auto-Action (AA)', level: 'high' },
+            { key: '/Launch', msg: 'Launch External Program', level: 'high' },
+            { key: '/URI', msg: 'External URI Links', level: 'low' },
+            { key: '/SubmitForm', msg: 'Form Data Submission', level: 'medium' },
+            { key: '/RichMedia', msg: 'Embedded Rich Media (Flash/3D)', level: 'medium' }
+        ];
+
+        checks.forEach(check => {
+            if(rawString.includes(check.key)) {
+                risks.push(check);
+            }
+        });
+
+        const resultsDiv = document.getElementById('threatResults');
+        resultsDiv.innerHTML = '';
+        
+        if(risks.length === 0) {
+            resultsDiv.innerHTML = '<div class="p-3 bg-green-900/20 border border-green-800 rounded text-green-400 text-sm"><i class="fa-solid fa-check-circle mr-2"></i>No standard threats detected.</div>';
+        } else {
+            risks.forEach(r => {
+                const color = r.level === 'high' ? 'text-red-400 border-red-900/50 bg-red-900/20' : (r.level === 'medium' ? 'text-yellow-400 border-yellow-900/50 bg-yellow-900/20' : 'text-blue-400 border-blue-900/50 bg-blue-900/20');
+                resultsDiv.innerHTML += `
+                    <div class="flex justify-between items-center p-3 rounded border ${color}">
+                        <span class="text-sm font-bold"><i class="fa-solid fa-triangle-exclamation mr-2"></i>${r.msg}</span>
+                        <span class="text-[10px] uppercase font-bold px-2 py-1 bg-black/30 rounded">${r.level}</span>
+                    </div>
+                `;
+            });
+        }
+        analysisData.risks = risks;
+    }
+
+    // --- Helpers ---
+    function extractPII(text, emailSet, ipSet) {
+        const emailRegex = /[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}/g;
+        const ipRegex = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g;
+        
+        const foundEmails = text.match(emailRegex);
+        if(foundEmails) foundEmails.forEach(e => emailSet.add(e));
+        
+        const foundIps = text.match(ipRegex);
+        if(foundIps) foundIps.forEach(ip => ipSet.add(ip));
+    }
+
+    function renderList(elementId, setOrArray, colorClass) {
+        const div = document.getElementById(elementId);
+        div.innerHTML = '';
+        const arr = Array.from(setOrArray);
+        if(arr.length === 0) {
+            div.innerHTML = '<span class="text-gray-600 italic">None detected</span>';
+        } else {
+            arr.forEach(item => {
+                div.innerHTML += `<div class="break-all border-b border-gray-800 pb-1 mb-1 ${colorClass}">${item}</div>`;
+            });
         }
     }
 
-    // --- Utilities ---
     function parsePDFDate(dateStr) {
         if (!dateStr || !dateStr.startsWith('D:')) return dateStr;
         try {
+            // Format: D:YYYYMMDDHHmmSSOHH'mm'
             const raw = dateStr.slice(2);
-            const y = raw.slice(0,4), m = raw.slice(4,6), d = raw.slice(6,8);
-            const h = raw.slice(8,10), min = raw.slice(10,12), s = raw.slice(12,14);
-            return `${y}-${m}-${d} ${h}:${min}:${s}`;
+            const y = raw.slice(0,4);
+            const m = raw.slice(4,6);
+            const d = raw.slice(6,8);
+            const h = raw.slice(8,10);
+            const min = raw.slice(10,12);
+            const s = raw.slice(12,14);
+            
+            // Basic formatting
+            let formatted = `${y}-${m}-${d} ${h}:${min}:${s}`;
+            
+            // Check for timezone info
+            if(raw.length > 14) {
+                const tz = raw.slice(14).replace("'", ":").replace("'", "");
+                formatted += ` (UTC${tz})`;
+            }
+            return formatted;
         } catch (e) { return dateStr; }
     }
 
     function exportReport() {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(analysisReport, null, 2));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", "osint_report_" + analysisReport.filename + ".json");
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
-    }
-
-    function copyXMP() {
-        const text = document.getElementById('xmpBox').textContent;
-        navigator.clipboard.writeText(text).then(() => alert('XMP copied to clipboard'));
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(analysisData, null, 2));
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = `FORENSIC_REPORT_${analysisData.filename}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
     }
 </script>
 </body>
